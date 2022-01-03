@@ -1,72 +1,43 @@
-# ✨ So you want to sponsor a contest
-
-This `README.md` contains a set of checklists for our contest collaboration.
-
-Your contest will use two repos: 
-- **a _contest_ repo** (this one), which is used for scoping your contest and for providing information to contestants (wardens)
-- **a _findings_ repo**, where issues are submitted. 
-
-Ultimately, when we launch the contest, this contest repo will be made public and will contain the smart contracts to be reviewed and all the information needed for contest participants. The findings repo will be made public after the contest is over and your team has mitigated the identified issues.
-
-Some of the checklists in this doc are for **C4 (🐺)** and some of them are for **you as the contest sponsor (⭐️)**.
-
----
-
-# Contest setup
-
-## ⭐️ Sponsor: Provide contest details
-
-Under "SPONSORS ADD INFO HERE" heading below, include the following:
-
-- [ ] Name of each contract and:
-  - [ ] lines of code in each
-  - [ ] external contracts called in each
-  - [ ] libraries used in each
-- [ ] Describe any novel or unique curve logic or mathematical models implemented in the contracts
-- [ ] Does the token conform to the ERC-20 standard? In what specific ways does it differ?
-- [ ] Describe anything else that adds any special logic that makes your approach unique
-- [ ] Identify any areas of specific concern in reviewing the code
-- [ ] Add all of the code to this repo that you want reviewed
-- [ ] Create a PR to this repo with the above changes.
-
----
-
-# ⭐️ Sponsor: Provide marketing details
-
-- [ ] Your logo (URL or add file to this repo - SVG or other vector format preferred)
-- [ ] Your primary Twitter handle
-- [ ] Any other Twitter handles we can/should tag in (e.g. organizers' personal accounts, etc.)
-- [ ] Your Discord URI
-- [ ] Your website
-- [ ] Optional: Do you have any quirks, recurring themes, iconic tweets, community "secret handshake" stuff we could work in? How do your people recognize each other, for example? 
-- [ ] Optional: your logo in Discord emoji format
-
----
-
-# Contest prep
-
-## ⭐️ Sponsor: Contest prep
-- [ ] Make sure your code is thoroughly commented using the [NatSpec format](https://docs.soliditylang.org/en/v0.5.10/natspec-format.html#natspec-format).
-- [ ] Modify the bottom of this `README.md` file to describe how your code is supposed to work with links to any relevent documentation and any other criteria/details that the C4 Wardens should keep in mind when reviewing. ([Here's a well-constructed example.](https://github.com/code-423n4/2021-06-gro/blob/main/README.md))
-- [ ] Please have final versions of contracts and documentation added/updated in this repo **no less than 8 hours prior to contest start time.**
-- [ ] Ensure that you have access to the _findings_ repo where issues will be submitted.
-- [ ] Promote the contest on Twitter (optional: tag in relevant protocols, etc.)
-- [ ] Share it with your own communities (blog, Discord, Telegram, email newsletters, etc.)
-- [ ] Optional: pre-record a high-level overview of your protocol (not just specific smart contract functions). This saves wardens a lot of time wading through documentation.
-- [ ] Designate someone (or a team of people) to monitor DMs & questions in the C4 Discord (**#questions** channel) daily (Note: please *don't* discuss issues submitted by wardens in an open channel, as this could give hints to other wardens.)
-- [ ] Delete this checklist and all text above the line below when you're ready.
-
----
-
 # XDEFI contest details
-- $23,750 USDC main award pot
-- $1,250 USDC gas optimization award pot
+- $25,000 USDC main award pot
 - Join [C4 Discord](https://discord.gg/code4rena) to register
 - Submit findings [using the C4 form](https://code4rena.com/contests/2022-01-xdefi-contest/submit)
 - [Read our guidelines for more details](https://docs.code4rena.com/roles/wardens)
-- Starts January 4, 2022 00:00 UTC
-- Ends January 6, 2022 23:59 UTC
+- Starts January 4th, 2022 00:00 UTC
+- Ends January 6th, 2022 23:59 UTC
 
-This repo will be made public before the start of the contest. (C4 delete this line when made public)
+# Audit Scope
 
-[ ⭐️ SPONSORS ADD INFO HERE ]
+This scope of this audit includes the following repo, all with corresponding release tags:
+
+- [XDeFi-tech/xdefi-distribution](https://github.com/XDeFi-tech/xdefi-distribution/releases/tag/v1.0.0-beta.0)
+
+There are 2 contracts here:
+- `XDEFIDistribution` is the main and only contract that is stateful, and extends openzeppelin's `ERC721Enumerable`, and adds custom "funds distribution" functionality, similar to an [ERC2222](https://github.com/ethereum/EIPs/issues/2222) [implementation](https://github.com/atpar/funds-distribution-token/blob/master/contracts/FundsDistributionToken.sol), but as NFT positions rather than ERC20 positions. You can read more in the `XDeFi-tech/xdefi-distribution` readme, or ask questions in the C4 Discord.
+- `XDEFIDistributionHelper` is a low-risk, stateless, helper smart contract intended to be used by front-ends/clients to batch query the `XDEFIDistribution` contract instead of having to make multiple web3 calls.
+
+## Focus Areas
+
+### Funds Distribution
+
+Ensure that distributution of additional funds sent to the `XDEFIDistribution` contract an recognized and accurately distributed via `updateDistribution`, so that they are withdrawable by position holders when they eventually unlock. Rounding errors (lack of precision) are expected, but should remain insignificant. However, it is important that new locking of XDEFI results in positions that are only eligible for portions of future rewards, and do not result in the "stealing" of past rewards from existing locked position holders. Similarly, the contract should never have less XDEFI that it needs to support all withdrawals/unlocks (i.e. sum of all `withdrawableOf` is less than or equal to the XEDFI balance of the contract itself).
+
+### Scored NFTs
+
+A position should always remain a valid NFT, even after it has been unlocked/withdrawn. The only difference between a locked and unlocked position is that:
+- locked positions cannot be merged
+- unlocked positions cannot be unlocked, and thus should not be eligible for any distributions of XDEFI, or and withdrawable amount of XDEFI
+
+Scores are determined by the contract and merging should not result in the loss or creation of additional points.
+
+### Decentralization
+
+It should not be possible for anyone, even for the contract owner, to affect the current withdrawable amount of any locked position (within acceptable rounding), or prevent it from being unlocked at all when the position owner expected it to be un-lockable. For example, `setLockPeriods` is only able to change the validity of lock times of new locked positions, but existing locked positions remain unaffected. Any account should be able to send XDEFI token to the `XDEFIDistribution` contract and have it distributed to existing locked positions via `updateDistribution`.
+
+## Assumptions and Issue Validity
+
+- `XDEFIDistributionHelper` gas optimizations are not valid since the contract is not intended to be used in state-changing calls (i.e. calls where an on-chain transaction occurs resulting in tx fees)
+- funds distribution accounting via the `_pointsPerUnit` and `pointsCorrection` is expected to result in minute inaccuracies where positions are allowed to withdraw slightly less than "they should". An issue of imprecision or rounding error is only valid if it results in the inability for a position to be unlocked/withdrawn, or a user getting more than expected (i.e. another position's share).
+- tokenIds are intended to exist beyond their position's unlocking (i.e. there is no burning of NFTs upon position unlocking)
+- It is assumed that the front-end/client-side dapp will be aware of valid locking durations (i.e. filtering events or hardcoded) so a mechanism to fetch thew array of valid locking durations is not necessary
+- The contract handles the maximum amount of XDEFI in existence, which is 240,000,000 * 1,000,000,000,000,000,000 (i.e. 240k * 1e18), a max expiry of 50 years, and a max reward multiplier of 2.55x
